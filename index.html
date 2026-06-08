@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>The Backrooms 3D - Human Simulation & YT Audio Force Fixed</title>
+    <title>The Backrooms 3D - GitHub Stream Audio Fixed</title>
     <style>
         body, html {
             margin: 0;
@@ -114,16 +114,6 @@
             font-weight: bold;
             font-size: 1.2rem;
         }
-        /* Sembunyikan player di luar koordinat layar agar tidak ngerusak visual */
-        #audio-container {
-            position: absolute;
-            top: -999px;
-            left: -999px;
-            width: 200px;
-            height: 200px;
-            overflow: hidden;
-            pointer-events: none;
-        }
         @keyframes blink {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
@@ -136,7 +126,6 @@
 <body>
 
     <div id="vignette"></div>
-    <div id="audio-container"></div>
 
     <div id="blocker">
         <h1>THE BACKROOMS</h1>
@@ -169,9 +158,13 @@
         const joyBase = document.getElementById('joystick-base');
         const joyKnob = document.getElementById('joystick-knob');
         const mobFlashBtn = document.getElementById('mobile-flashlight');
-        const audioContainer = document.getElementById('audio-container');
 
         let isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        // --- STREAM AUDIO LANGSUNG DARI GITHUB KAMU ---
+        const audioUrl = 'https://github.com/sghwo030-creator/supreme-octo-fortnight/raw/refs/heads/main/d0f36c55-de31-4bc4-b93a-fa0424c1be23.mp4';
+        const bgm = new Audio(audioUrl); 
+        bgm.loop = true; 
 
         // --- THREE.JS ENGINE SETUP ---
         const scene = new THREE.Scene();
@@ -269,18 +262,13 @@
         let targetRoll = 0, currentRoll = 0, walkRoll = 0;
         let flashlightOn = true;
 
-        // --- AMBIL TINDAKAN SAAT KLIK (FORCE INJECT AUDIO DI SINI) ---
+        // --- EVENT PAS KLIK MASUK ---
         blocker.addEventListener('click', () => {
             
-            // TRICK JITU: Memaksa iframe masuk tepat saat sidik jari user menyentuh layar (100% Lolos Autoplay Block)
-            audioContainer.innerHTML = `
-                <iframe 
-                    width="200" 
-                    height="200" 
-                    src="https://www.youtube.com/embed/mu1dVlu9KIo?autoplay=1&loop=1&playlist=mu1dVlu9KIo&controls=0&mute=0" 
-                    allow="autoplay; encrypted-media" 
-                    frameborder="0">
-                </iframe>`;
+            // MAINKAN LAGU SECARA PAKSA LEWAT KLIK USER
+            bgm.play().catch(error => {
+                console.log("Gagal memutar lagu otomatis:", error);
+            });
 
             if (isMobile) {
                 blocker.style.display = 'none'; ui.style.display = 'block';
@@ -417,7 +405,7 @@
                 if (!checkCollision(nX, camera.position.z)) camera.position.x = nX;
                 if (!checkCollision(camera.position.x, nZ)) camera.position.z = nZ;
 
-                // Human FX
+                // Efek Dinamis Manusia
                 if (isMovingDesktop || isMovingMobile) {
                     bobTimer += 0.145;
                     camera.position.y = 1.7 + Math.sin(bobTimer) * 0.045;
