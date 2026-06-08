@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Backrooms 3D - Human Simulation & YT Audio Force Fixed</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            background-color: #050500;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            touch-action: none;
+        }
+        /* Efek Lensa Kamera Tua */
+        #vignette {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.95), inset 0 0 25px rgba(0,0,0,0.9);
+            z-index: 4;
+            pointer-events: none;
+        }
+        #blocker {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(11, 11, 0, 0.98);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #d1c280;
+            text-align: center;
+            cursor: pointer;
+            z-index: 10;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #blocker h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            letter-spacing: 6px;
+            animation: blink 2.5s infinite;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #d1c280;
+            text-shadow: 2px 2px 4px #000;
+            pointer-events: none;
+            z-index: 5;
+            display: none;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+            pointer-events: none;
+        }
+        /* --- UI MOBILE KONTROL --- */
+        #joystick-container {
+            position: absolute;
+            bottom: 40px;
+            left: 40px;
+            width: 110px;
+            height: 110px;
+            z-index: 6;
+            display: none;
+        }
+        #joystick-base {
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(209, 194, 128, 0.4);
+            border-radius: 50%;
+            position: relative;
+        }
+        #joystick-knob {
+            width: 45px;
+            height: 45px;
+            background: rgba(209, 194, 128, 0.6);
+            border-radius: 50%;
+            position: absolute;
+            top: 32px;
+            left: 32px;
+            transition: transform 0.05s ease-out;
+        }
+        #mobile-flashlight {
+            position: absolute;
+            bottom: 50px;
+            right: 40px;
+            width: 65px;
+            height: 65px;
+            background: rgba(209, 194, 128, 0.2);
+            border: 2px solid #d1c280;
+            border-radius: 50%;
+            display: none;
+            z-index: 6;
+            align-items: center;
+            justify-content: center;
+            color: #d1c280;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        /* Sembunyikan player di luar koordinat layar agar tidak ngerusak visual */
+        #audio-container {
+            position: absolute;
+            top: -999px;
+            left: -999px;
+            width: 200px;
+            height: 200px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        @media (max-width: 768px) {
+            #crosshair { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="vignette"></div>
+    <div id="audio-container"></div>
+
+    <div id="blocker">
+        <h1>THE BACKROOMS</h1>
+        <p style="font-size: 1.1rem; letter-spacing: 1px; color: #fff;">KLIK LAYAR UNTUK MASUK</p>
+        <p style="font-size: 0.75rem; color: #8a7e4e; margin-top: 30px; line-height: 1.6;">
+            <b>DESKTOP:</b> WASD untuk Jalan | Mouse untuk Lihat | F untuk Senter<br>
+            <b>MOBILE:</b> Joystick Kiri untuk Jalan | Usap Layar Kanan untuk Lihat | Tombol F untuk Senter
+        </p>
+    </div>
+
+    <div id="ui">
+        <h2>LEVEL 0</h2>
+        <p id="flashlight-status">Senter: NYALA (Tekan F)</p>
+    </div>
+
+    <div id="joystick-container">
+        <div id="joystick-base">
+            <div id="joystick-knob"></div>
+        </div>
+    </div>
+    <div id="mobile-flashlight">F</div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        const blocker = document.getElementById('blocker');
+        const ui = document.getElementById('ui');
+        const flashlightStatus = document.getElementById('flashlight-status');
+        const joyContainer = document.getElementById('joystick-container');
+        const joyBase = document.getElementById('joystick-base');
+        const joyKnob = document.getElementById('joystick-knob');
+        const mobFlashBtn = document.getElementById('mobile-flashlight');
+        const audioContainer = document.getElementById('audio-container');
+
+        let isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        // --- THREE.JS ENGINE SETUP ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x121208, 0.09);
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        scene.add(camera); 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.75;
+        document.body.appendChild(renderer.domElement);
+
+        // --- MAP DATA & TEXTURE ---
+        const UNIT_SIZE = 4;
+        const map = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,1],
+            [1,0,1,1,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1],
+            [1,0,1,0,0,0,1,0,1,0,0,0,0,1,0,0,0,1,0,1],
+            [1,0,1,0,1,1,1,0,1,0,1,1,0,1,1,1,1,1,0,1],
+            [1,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,0,1,0,1],
+            [1,1,1,0,1,0,1,1,1,0,1,1,1,1,1,1,0,1,0,1],
+            [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
+            [1,0,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,0,1],
+            [1,0,1,0,0,0,1,0,0,0,0,0,0,1,0,1,0,0,0,1],
+            [1,0,1,0,1,0,1,1,1,1,1,1,0,1,0,1,0,1,1,1],
+            [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,1,0,1],
+            [1,0,1,1,1,1,1,0,1,0,1,0,1,1,1,1,0,1,0,1],
+            [1,0,1,0,0,0,1,0,0,0,1,0,1,0,0,1,0,0,0,1],
+            [1,0,1,0,1,0,1,1,1,1,1,0,1,0,0,1,1,1,0,1],
+            [1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1],
+            [1,0,1,0,1,1,1,1,1,0,1,1,1,1,1,1,0,1,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+
+        function createTex(color, secondary, lines = false) {
+            const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color; ctx.fillRect(0, 0, 128, 128);
+            if(lines) {
+                ctx.fillStyle = secondary; for(let i=0; i<128; i+=8) ctx.fillRect(i, 0, 2, 128);
+            } else {
+                for(let i=0; i<800; i++) { ctx.fillStyle = Math.random() > 0.5 ? secondary : color; ctx.fillRect(Math.random()*128, Math.random()*128, 2, 2); }
+            }
+            const t = new THREE.CanvasTexture(canvas); t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping; return t;
+        }
+
+        const wallMat = new THREE.MeshStandardMaterial({ map: createTex('#bfae78', '#aba06c', true), roughness: 0.8 });
+        const mapW = map[0].length * UNIT_SIZE, mapH = map.length * UNIT_SIZE;
+        
+        const floorTex = createTex('#54462d', '#3d3320'); floorTex.repeat.set(mapW/2, mapH/2);
+        const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.95 });
+
+        const ceilTex = createTex('#a1a188', '#787866'); ceilTex.repeat.set(mapW/2, mapH/2);
+        const ceilMat = new THREE.MeshStandardMaterial({ map: ceilTex, roughness: 0.7 });
+
+        const wallGeo = new THREE.BoxGeometry(UNIT_SIZE, UNIT_SIZE, UNIT_SIZE);
+        for(let z=0; z<map.length; z++) {
+            for(let x=0; x<map[z].length; x++) {
+                if(map[z][x] === 1) {
+                    const w = new THREE.Mesh(wallGeo, wallMat); w.position.set(x*UNIT_SIZE, UNIT_SIZE/2, z*UNIT_SIZE); scene.add(w);
+                } else if(Math.random() > 0.88) {
+                    createNeon(x*UNIT_SIZE, UNIT_SIZE, z*UNIT_SIZE);
+                }
+            }
+        }
+
+        function createNeon(x, y, z) {
+            const m = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.3), new THREE.MeshBasicMaterial({ color: 0xeeeedd }));
+            m.position.set(x, y-0.02, z); scene.add(m);
+            const p = new THREE.PointLight(0xfffae0, 0.45, 9); p.position.set(x, y-0.2, z); scene.add(p);
+        }
+
+        const fFloor = new THREE.Mesh(new THREE.PlaneGeometry(mapW, mapH), floorMat); fFloor.rotation.x = -Math.PI/2; fFloor.position.set(mapW/2-UNIT_SIZE/2, 0, mapH/2-UNIT_SIZE/2); scene.add(fFloor);
+        const fCeil = new THREE.Mesh(new THREE.PlaneGeometry(mapW, mapH), ceilMat); fCeil.rotation.x = Math.PI/2; fCeil.position.set(mapW/2-UNIT_SIZE/2, UNIT_SIZE, mapH/2-UNIT_SIZE/2); scene.add(fCeil);
+        scene.add(new THREE.AmbientLight(0x222211, 0.25));
+
+        // --- SETUP SENTER ---
+        const flashlight = new THREE.SpotLight(0xfffbe8, 2.8, 15, Math.PI / 4.8, 0.5, 1.2);
+        const flTarget = new THREE.Object3D(); flTarget.position.set(0, 0, -1);
+        camera.add(flTarget); camera.add(flashlight); flashlight.target = flTarget;
+
+        // --- LOGIKA PERGERAKAN ---
+        camera.position.set(1 * UNIT_SIZE, 1.7, 1 * UNIT_SIZE);
+
+        const move = { forward: false, backward: false, left: false, right: false };
+        const direction = new THREE.Vector3();
+        const speed = 0.055, playerRadius = 0.35;
+        
+        let yaw = 0, pitch = 0, bobTimer = 0;
+        let targetRoll = 0, currentRoll = 0, walkRoll = 0;
+        let flashlightOn = true;
+
+        // --- AMBIL TINDAKAN SAAT KLIK (FORCE INJECT AUDIO DI SINI) ---
+        blocker.addEventListener('click', () => {
+            
+            // TRICK JITU: Memaksa iframe masuk tepat saat sidik jari user menyentuh layar (100% Lolos Autoplay Block)
+            audioContainer.innerHTML = `
+                <iframe 
+                    width="200" 
+                    height="200" 
+                    src="https://www.youtube.com/embed/mu1dVlu9KIo?autoplay=1&loop=1&playlist=mu1dVlu9KIo&controls=0&mute=0" 
+                    allow="autoplay; encrypted-media" 
+                    frameborder="0">
+                </iframe>`;
+
+            if (isMobile) {
+                blocker.style.display = 'none'; ui.style.display = 'block';
+                joyContainer.style.display = 'block'; mobFlashBtn.style.display = 'flex';
+            } else {
+                document.body.requestPointerLock();
+            }
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            if (!isMobile) {
+                const active = document.pointerLockElement === document.body;
+                blocker.style.display = active ? 'none' : 'flex';
+                ui.style.display = active ? 'block' : 'none';
+            }
+        });
+
+        // Mouse Look
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                yaw -= e.movementX * 0.0022;
+                pitch -= e.movementY * 0.0022;
+                pitch = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, pitch));
+                targetRoll = -e.movementX * 0.004; 
+            }
+        });
+
+        // Swipe Look Mobile
+        let lookTouchId = null, lastLookX = 0, lastLookY = 0;
+        document.addEventListener('touchstart', (e) => {
+            if (!isMobile) return;
+            for (let t of e.changedTouches) {
+                if (t.clientX > window.innerWidth / 2) { 
+                    lookTouchId = t.identifier; lastLookX = t.clientX; lastLookY = t.clientY;
+                }
+            }
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!isMobile) return;
+            for (let t of e.changedTouches) {
+                if (t.identifier === lookTouchId) {
+                    let dx = t.clientX - lastLookX, dy = t.clientY - lastLookY;
+                    yaw -= dx * 0.005; pitch -= dy * 0.005;
+                    pitch = Math.max(-Math.PI/2.5, Math.min(Math.PI/2.5, pitch));
+                    targetRoll = -dx * 0.012; 
+                    lastLookX = t.clientX; lastLookY = t.clientY;
+                }
+            }
+        });
+
+        document.addEventListener('touchend', (e) => {
+            for (let t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null;
+        });
+
+        function toggleFlashlight() {
+            flashlightOn = !flashlightOn; flashlight.intensity = flashlightOn ? 2.8 : 0;
+            flashlightStatus.innerText = flashlightOn ? "Senter: NYALA (Tekan F)" : "Senter: MATI (Tekan F)";
+        }
+        mobFlashBtn.addEventListener('touchstart', (e) => { e.preventDefault(); toggleFlashlight(); });
+
+        const handleKey = (e, isDown) => {
+            if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') move.forward = isDown;
+            if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') move.backward = isDown;
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') move.left = isDown;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') move.right = isDown;
+            if (isDown && (e.key === 'f' || e.key === 'F') && document.pointerLockElement === document.body) toggleFlashlight();
+        };
+        document.addEventListener('keydown', (e) => handleKey(e, true));
+        document.addEventListener('keyup', (e) => handleKey(e, false));
+
+        // --- JOYSTICK MOBILE ---
+        let joyTouchId = null, joyActive = false, joyVec = { x: 0, y: 0 };
+        joyContainer.addEventListener('touchstart', (e) => { e.preventDefault(); joyTouchId = e.targetTouches[0].identifier; joyActive = true; });
+
+        document.addEventListener('touchmove', (e) => {
+            if (!joyActive) return;
+            for (let t of e.changedTouches) {
+                if (t.identifier === joyTouchId) {
+                    const rect = joyBase.getBoundingClientRect();
+                    const cX = rect.left + rect.width / 2, cY = rect.top + rect.height / 2;
+                    let dx = t.clientX - cX, dy = t.clientY - cY;
+                    const d = Math.sqrt(dx*dx + dy*dy), maxD = rect.width / 2;
+                    if (d > maxD) { dx = (dx/d)*maxD; dy = (dy/d)*maxD; }
+                    joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+                    joyVec.x = dx / maxD; joyVec.y = -dy / maxD;
+                }
+            }
+        });
+
+        const stopJoystick = (e) => {
+            if (!joyActive) return;
+            for (let t of e.changedTouches) {
+                if (t.identifier === joyTouchId) {
+                    joyActive = false; joyTouchId = null;
+                    joyKnob.style.transform = 'translate(0px, 0px)'; joyVec = { x: 0, y: 0 };
+                }
+            }
+        };
+        document.addEventListener('touchend', stopJoystick); document.addEventListener('touchcancel', stopJoystick);
+
+        // --- COLLISION ---
+        function checkCollision(tX, tZ) {
+            const pts = [{x:tX-playerRadius, z:tZ-playerRadius}, {x:tX+playerRadius, z:tZ-playerRadius}, {x:tX-playerRadius, z:tZ+playerRadius}, {x:tX+playerRadius, z:tZ+playerRadius}];
+            for (let p of pts) {
+                const gX = Math.floor((p.x + UNIT_SIZE / 2) / UNIT_SIZE), gZ = Math.floor((p.z + UNIT_SIZE / 2) / UNIT_SIZE);
+                if (gZ < 0 || gZ >= map.length || gX < 0 || gX >= map[0].length || map[gZ][gX] === 1) return true;
+            }
+            return false;
+        }
+
+        // --- ENGINE TICK ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const isMovingDesktop = (move.forward || move.backward || move.left || move.right);
+            const isMovingMobile = (isMobile && joyActive && (joyVec.x !== 0 || joyVec.y !== 0));
+
+            if (document.pointerLockElement === document.body || isMovingMobile || lookTouchId !== null) {
+                
+                let mX = Number(move.right) - Number(move.left);
+                let mZ = Number(move.backward) - Number(move.forward);
+                
+                if (isMobile && joyActive) { mX = joyVec.x; mZ = -joyVec.y; }
+
+                direction.set(mX, 0, mZ);
+                if (direction.length() > 1) direction.normalize();
+
+                const cYaw = camera.rotation.y;
+                let dX = (Math.sin(cYaw) * direction.z + Math.cos(cYaw) * direction.x) * speed;
+                let dZ = (Math.cos(cYaw) * direction.z - Math.sin(cYaw) * direction.x) * speed;
+
+                const nX = camera.position.x + dX, nZ = camera.position.z + dZ;
+                if (!checkCollision(nX, camera.position.z)) camera.position.x = nX;
+                if (!checkCollision(camera.position.x, nZ)) camera.position.z = nZ;
+
+                // Human FX
+                if (isMovingDesktop || isMovingMobile) {
+                    bobTimer += 0.145;
+                    camera.position.y = 1.7 + Math.sin(bobTimer) * 0.045;
+                    walkRoll = Math.cos(bobTimer) * 0.008;
+                } else {
+                    camera.position.y = THREE.MathUtils.lerp(camera.position.y, 1.7, 0.08);
+                    walkRoll = THREE.MathUtils.lerp(walkRoll, 0, 0.08);
+                }
+
+                currentRoll = THREE.MathUtils.lerp(currentRoll, targetRoll, 0.08);
+                targetRoll = THREE.MathUtils.lerp(targetRoll, 0, 0.08); 
+
+                let finalRoll = currentRoll + walkRoll;
+                let turnJitter = 0;
+                if (Math.abs(targetRoll) > 0.004) {
+                    turnJitter = (Math.random() - 0.5) * Math.abs(targetRoll) * 0.45;
+                }
+
+                camera.rotation.order = "YXZ";
+                camera.rotation.set(pitch + turnJitter, yaw, finalRoll + turnJitter);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
